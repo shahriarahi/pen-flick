@@ -21,8 +21,8 @@
      ------------------------------------------------------------------------ */
   PG.VIEW = { width: 1280, height: 800 };
 
-  // The desk is the playable surface; its four edges form the "fall-off"
-  // sensor boundary. A thin strip of floor is drawn around it so you can watch
+  // The desk is the playable surface; a pen falls off once its centre (more
+  // than half of the pen) crosses one of its four edges. A thin strip of floor is drawn around it so you can watch
   // a pen tumble off. Set DESK_MARGIN to 0 to make the desk edges exactly the
   // canvas edges.
   const DESK_MARGIN = 60;
@@ -255,40 +255,53 @@
     PLAN_BUDGET_MS: 10, // per-frame CPU budget for the Hard AI's shot rehearsals
     SIM_MAX_TICKS: 720, // longest rehearsal (12 s of simulated time)
 
+    // Fair start: a new match re-rolls the starting layout (up to `attempts`
+    // times) until whoever shoots first has no knock-out on the opening shot.
+    FAIR_START: {
+      attempts: 12,
+      rehearsals: 250, // previews per layout check (it stops early once it finds a knock-out)
+      search: null, // null = check with the same shot search the Hard AI uses
+    },
+
     easy: {
       label: 'Easy',
       description:
-        'Aims roughly at your pen (up to 20° off) and flicks with a wildly random force.',
-      maxAngleErrorDeg: 20,
-      powerMin: 0.2,
-      powerMax: 1.0,
-      grabOffsetFraction: 0.35, // grabs off-centre → accidental spin
+        'Aims roughly at your pen (up to 12° off) with a hit-or-miss force. Rarely throws its own pen away.',
+      maxAngleErrorDeg: 12,
+      powerMin: 0.8, // force = (force needed to reach you) x random 0.8…1.8
+      powerMax: 1.8,
+      arrivalSpeed: 3,
+      grabOffsetFraction: 0.3, // grabs off-centre → accidental spin
     },
 
     medium: {
       label: 'Medium',
       description:
-        'Calculates the exact angle to your pen, then misses by 1–5°. Uses a moderate, sensible force.',
-      minAngleErrorDeg: 1,
-      maxAngleErrorDeg: 5,
-      powerMin: 0.5,
-      powerMax: 0.7,
-      powerCap: 0.85,
-      arrivalSpeed: 4, // makes sure the shot at least reaches you with some punch
-      grabOffsetFraction: 0.06,
+        'Rehearses a handful of shots to find a knock-out, otherwise plays a safe push — but its hand wobbles a little.',
+      maxRehearsals: 120, // physics previews per turn
+      search: { maxAngleDeg: 8, angleStepDeg: 4, grabOffsets: [0], powerStep: 0.08, refineIterations: 3 },
+      aimNoiseDeg: 1.5, // the "wobble": random angle error of up to ±1.5°…
+      powerNoise: 0.08, // …and ±8% force error on the chosen shot
+      exitMargin: 12,
+      edgeSafetyMargin: 15,
+      attackWeight: 0.3, // how much it values setting up its next knock-out vs. staying safe
     },
 
     hard: {
       label: 'Hard',
       description:
-        'Fires along the perfect centre-of-mass line and computes the exact force to push your pen off — without losing its own.',
-      exitMargin: 12, // extra distance past the edge so your pen is *completely* off
+        'Searches angled and spinning shots for a knock-out. If there is none, it picks the spot where you can’t knock it off.',
+      maxRehearsals: 450, // physics previews for its own shot each turn
+      // Knock-out search: directions up to ±24° from the centre line (3° steps),
+      // grabbed at the centre and halfway to either end (spin), force in 6% steps.
+      search: { maxAngleDeg: 24, angleStepDeg: 3, grabOffsets: [0, -0.5, 0.5], powerStep: 0.06, refineIterations: 4 },
+      exitMargin: 12, // aim to push your pen's centre this far past the edge (it falls once the centre crosses)
       edgeSafetyMargin: 15, // its own pen must finish at least this far from any edge
-      refineIterations: 6, // binary-search steps when refining the minimum force
-      forceCushion: 0.03, // +3% on top of the minimum force, if still safe
-      sweepMin: 0.1, // the power sweep that rehearses shots from 10%…
-      sweepStep: 0.05, // …to 100% in 5% steps before refining
-      fallbackSafety: 60, // when no knock-out exists, keep its own pen this far from edges
+      attackWeight: 0.3, // how much it values setting up its next knock-out vs. staying safe
+      retreatPowers: [0.15, 0.3, 0.45, 0.6], // extra "back off toward the middle" shots it considers
+      replyCandidates: 10, // best positions checked against your possible replies…
+      replyRehearsals: 160, // …each with up to this many previews of your shots
+      reply: null, // null = imagine your replies with the same search it uses for its own shots
     },
   };
 })((window.PenGame = window.PenGame || {}));

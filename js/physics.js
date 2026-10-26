@@ -1,6 +1,6 @@
 /* ==========================================================================
    physics.js — Matter.js world setup, pen bodies, flick impulses, the
-   off-desk sensor boundary and "have the pens stopped?" detection.
+   "has it tipped off the desk?" test and "have the pens stopped?" detection.
 
    PG.createPhysics() builds a completely self-contained world. The game uses
    one for the real match, and the Hard AI spins up throw-away copies to
@@ -9,7 +9,7 @@
 (function (PG) {
   'use strict';
 
-  const { Engine, Bodies, Body, Composite, Events, Query } = Matter;
+  const { Engine, Bodies, Body, Composite, Events } = Matter;
   const P = PG.PHYSICS;
   const D = PG.DESK;
 
@@ -34,18 +34,6 @@
     engine.gravity.x = 0;
     engine.gravity.y = 0;
     engine.gravity.scale = 0;
-
-    // ---- The sensor boundary --------------------------------------------
-    // A static *sensor* body covering the desk surface. Sensors detect overlap
-    // but never push anything, so pens slide freely across the edge. A pen has
-    // fallen off once it no longer overlaps this sensor AT ALL — i.e. it has
-    // completely crossed the desk boundary. (It is not added to the world:
-    // we query it directly, which is cheaper and fully deterministic.)
-    const deskSensor = Bodies.rectangle(D.x + D.w / 2, D.y + D.h / 2, D.w, D.h, {
-      isStatic: true,
-      isSensor: true,
-      label: 'desk-sensor',
-    });
 
     // ---- Pen-on-pen impact notifications (used for visual effects) -------
     const collisionListeners = [];
@@ -136,9 +124,15 @@
       Body.setAngularVelocity(body, 0);
     }
 
-    /** True while ANY part of the pen still overlaps the desk sensor. */
+    /**
+     * True while the pen's centre of mass is still over the desk. A pen is a
+     * uniform rod, so it tips over the edge the moment its centre crosses it —
+     * i.e. as soon as more than half of its body hangs off. The edges carry no
+     * collision body, so pens slide freely across them.
+     */
     function isOnDesk(body) {
-      return Query.collides(body, [deskSensor]).length > 0;
+      const { x, y } = body.position;
+      return x >= D.x && x <= D.x + D.w && y >= D.y && y <= D.y + D.h;
     }
 
     /** True when every body's linear AND angular speed is below the tiny thresholds. */
@@ -182,7 +176,6 @@
 
     return {
       engine,
-      deskSensor,
       addPen,
       removePen,
       step,

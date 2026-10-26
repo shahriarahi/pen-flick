@@ -8,6 +8,7 @@
                          │                      │   └─pen falls─▶ GAME_OVER  ▼
                          └────pens settled──────┘◀──────release──────── AI_AIM
 
+   A match starts in PLAYER_AIM or AI_THINK — the first move alternates.
    Input is only accepted in PLAYER_AIM. In SIMULATING we wait until BOTH
    pens' linear and angular speeds stay below tiny thresholds before handing
    the turn over.
@@ -75,6 +76,7 @@
     state: STATE.MENU,
     stateTime: 0,
     matchId: 0,
+    matchesPlayed: 0, // drives who shoots first (alternates each match)
     settings: { penId: 'ballpoint', difficulty: 'medium' },
     physics: null,
     pens: null, // { player, ai }
@@ -128,11 +130,13 @@
 
     const playerDef = PG.PENS[game.settings.penId];
     const aiDef = PG.PENS[U.pick(PG.PEN_ORDER)];
-    const cx = D.x + D.w / 2;
+    // The first move alternates between matches (you start the very first one).
+    const first = game.matchesPlayed++ % 2 === 0 ? 'player' : 'ai';
+    const start = fairLayout(playerDef, aiDef, first);
     game.physics = physics;
     game.pens = {
-      player: makePen(physics, 'player', playerDef, cx + U.rand(-80, 80), D.y + D.h * 0.74, U.rand(-0.35, 0.35)),
-      ai: makePen(physics, 'ai', aiDef, cx + U.rand(-80, 80), D.y + D.h * 0.26, Math.PI + U.rand(-0.35, 0.35)),
+      player: makePen(physics, 'player', playerDef, start.player.x, start.player.y, start.player.angle),
+      ai: makePen(physics, 'ai', aiDef, start.ai.x, start.ai.y, start.ai.angle),
     };
     game.turnNumber = 0;
     game.outcome = null;
@@ -147,7 +151,35 @@
     ui.hud.classList.remove('hidden');
     ui.footer.classList.remove('hidden');
 
-    beginTurn('player');
+    beginTurn(first);
+  }
+
+  /** Random starting spots, re-rolled until the first shooter can't simply
+      knock the other pen off with the opening shot. Attempts alternate between
+      facing rows (player near you, computer at the far side) and the two ends
+      of the desk — light pens are almost always knock-out-able in the rows
+      layout, but rarely when they start the full desk length apart. */
+  function fairLayout(playerDef, aiDef, first) {
+    const cx = D.x + D.w / 2;
+    const cy = D.y + D.h / 2;
+    let layout;
+    for (let i = 0; i < AIS.FAIR_START.attempts; i++) {
+      if (i % 2 === 0) {
+        layout = {
+          player: { def: playerDef, x: cx + U.rand(-80, 80), y: D.y + D.h * 0.74, angle: U.rand(-0.35, 0.35) },
+          ai: { def: aiDef, x: cx + U.rand(-80, 80), y: D.y + D.h * 0.26, angle: Math.PI + U.rand(-0.35, 0.35) },
+        };
+      } else {
+        const side = U.randSign(); // which end the player starts at
+        layout = {
+          player: { def: playerDef, x: cx - side * D.w * 0.3, y: cy + U.rand(-90, 90), angle: Math.PI / 2 + U.rand(-0.35, 0.35) },
+          ai: { def: aiDef, x: cx + side * D.w * 0.3, y: cy + U.rand(-90, 90), angle: Math.PI / 2 + U.rand(-0.35, 0.35) },
+        };
+      }
+      const [shooter, target] = first === 'player' ? [layout.player, layout.ai] : [layout.ai, layout.player];
+      if (!PG.AI.hasOpeningKnockout(shooter, target)) break;
+    }
+    return layout;
   }
 
   function beginTurn(who) {
@@ -172,7 +204,7 @@
     setState(STATE.SIMULATING);
   }
 
-  /** Detects pens that have completely crossed the desk boundary. */
+  /** Detects pens that have tipped off: more than half the pen past the desk edge. */
   function handleFalls() {
     const fallen = [];
     for (const pen of [game.pens.player, game.pens.ai]) {
