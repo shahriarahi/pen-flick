@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pen Flick — Desk Duel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- The stage is sized by renderer.js to fit the window while keeping the world's aspect ratio. -->
+    <div id="stage">
+      <canvas id="game" aria-label="Pen flicking game board"></canvas>
+
+      <!-- In-game HUD (sits over the floor margin above the desk) -->
+      <div id="hud" class="hidden">
+        <div class="hud-side hud-player">
+          <span class="dot"></span>
+          <span class="hud-name" id="hud-player-name">You</span>
+          <small id="hud-player-pen"></small>
+        </div>
+        <div class="hud-center">
+          <div id="turn-pill" class="turn-pill player">Your Turn</div>
+        </div>
+        <div class="hud-side hud-ai">
+          <small id="hud-ai-pen"></small>
+          <span class="hud-name" id="hud-ai-name">Computer</span>
+          <span class="dot"></span>
+        </div>
+      </div>
+
+      <div id="footer" class="footer hidden">
+        <span id="turn-status" class="turn-status"></span>
+        <button id="btn-menu" class="hud-btn" type="button" title="Back to the main menu">☰ Menu</button>
+      </div>
+
+      <!-- Big animated "Your Turn" / "Computer's Turn" overlay -->
+      <div id="turn-banner" class="turn-banner"></div>
+    </div>
+  </div>
+
+  <!-- ===================== Pre-game menu ===================== -->
+  <div id="menu" class="overlay">
+    <div class="panel">
+      <p id="greeting" class="greeting"></p>
+      <h1 class="title">Pen Flick <span>Desk Duel</span></h1>
+      <p class="lead">
+        Flick your pen into the computer's pen and knock it off the desk.
+        Careful &mdash; if your <em>own</em> pen slides off, you lose instantly.
+      </p>
+
+      <h2>1 &middot; Choose your pen</h2>
+      <div id="pen-cards" class="pen-cards"></div>
+
+      <h2>2 &middot; Computer difficulty</h2>
+      <div id="diff-row" class="diff-row"></div>
+      <p id="diff-desc" class="diff-desc"></p>
+
+      <div class="how">
+        <b>How to play:</b> press on your pen, drag <b>backwards</b> like a slingshot, and release.
+        Grab near the ends to add spin. <kbd>Esc</kbd> or right-click cancels a shot.
+      </div>
+
+      <button id="btn-start" class="btn-primary" type="button">Start Match</button>
+    </div>
+  </div>
+
+  <!-- ===================== Game over ===================== -->
+  <div id="gameover" class="overlay hidden">
+    <div class="panel small">
+      <h1 id="go-title" class="title">You Win!</h1>
+      <p id="go-reason" class="go-reason"></p>
+      <p id="go-stats" class="muted"></p>
+      <div class="btn-row">
+        <button id="btn-again" class="btn-primary" type="button">Play Again</button>
+        <button id="btn-setup" class="btn-secondary" type="button">Change Setup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Matter.js 2D physics engine (CDN, with a fallback CDN if the first one is unreachable) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <script>
+    window.Matter || document.write('<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"><\/script>');
+  </script>
+
+  <!-- Game modules: each one attaches itself to the shared window.PenGame namespace.
+       Order matters: utils -> config -> physics -> renderer -> input -> ai -> main. -->
+  <script src="js/utils.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

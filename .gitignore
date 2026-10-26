@@ -1,0 +1,7 @@
+# Claude Code session files
+.claude/
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+.vscode/
