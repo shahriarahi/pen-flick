@@ -1,0 +1,13 @@
+{
+  "appId": "io.github.shahriarahi.penflick",
+  "appName": "Pen Flick",
+  "webDir": "www",
+  "backgroundColor": "#0c0b0a",
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

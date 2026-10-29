@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- viewport-fit=cover lets the game use the whole phone screen; style.css keeps
+       the UI clear of notches and rounded corners with the safe-area insets. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Pen Flick — Desk Duel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="vendor/fonts.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -61,7 +61,7 @@
 
       <div class="how">
         <b>How to play:</b> press on your pen, drag <b>backwards</b> like a slingshot, and release.
-        Grab near the ends to add spin. <kbd>Esc</kbd> or right-click cancels a shot.
+        Grab near the ends to add spin. <span id="cancel-hint"><kbd>Esc</kbd> or right-click cancels a shot.</span>
       </div>
 
       <button id="btn-start" class="btn-primary" type="button">Start Match</button>
@@ -81,16 +81,18 @@
     </div>
   </div>
 
-  <!-- Matter.js 2D physics engine (CDN, with a fallback CDN if the first one is unreachable) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-  <script>
-    window.Matter || document.write('<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"><\/script>');
-  </script>
+  <!-- Bundled libraries (copied from node_modules by `npm run vendor`, so no network is needed):
+       Matter.js 2D physics, plus the Capacitor runtime and App plugin used by the Android app.
+       The Capacitor files are harmless in a normal browser. -->
+  <script src="vendor/matter.min.js"></script>
+  <script src="vendor/capacitor.js"></script>
+  <script src="vendor/capacitor-app.js"></script>
 
   <!-- Game modules: each one attaches itself to the shared window.PenGame namespace.
-       Order matters: utils -> config -> physics -> renderer -> input -> ai -> main. -->
+       Order matters: utils -> config -> native -> physics -> renderer -> input -> ai -> main. -->
   <script src="js/utils.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/native.js"></script>
   <script src="js/physics.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/input.js"></script>

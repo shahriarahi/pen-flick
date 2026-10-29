@@ -5,3 +5,6 @@
 .DS_Store
 Thumbs.db
 .vscode/
+
+# npm
+node_modules/

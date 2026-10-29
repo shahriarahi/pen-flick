@@ -19,7 +19,7 @@
   if (!window.Matter) {
     document.body.innerHTML =
       '<p style="font:18px system-ui;color:#eee;padding:40px;text-align:center">' +
-      'Could not load the Matter.js physics engine from the CDN.<br>Please check your internet connection and reload.</p>';
+      'Could not load the Matter.js physics engine (vendor/matter.min.js).<br>Run <code>npm run vendor</code> and reload.</p>';
     return;
   }
 
@@ -39,6 +39,8 @@
 
   const FALL_MS = 800;
   const NAME = PG.PLAYER_NAME || 'Player';
+  // How to cancel an aim: Esc in a browser, the back button in the Android app.
+  const CANCEL_HINT = PG.native.isApp ? 'Back cancels' : 'Esc cancels';
 
   /* ---------------- DOM ---------------- */
   const $ = (id) => document.getElementById(id);
@@ -414,7 +416,7 @@
     pill.textContent = mine ? 'Your Turn' : "Computer's Turn";
     ui.status.textContent =
       {
-        [STATE.PLAYER_AIM]: 'Press on your pen, drag backwards and release to flick · Esc cancels',
+        [STATE.PLAYER_AIM]: `Press on your pen, drag backwards and release to flick · ${CANCEL_HINT}`,
         [STATE.AI_THINK]: 'The computer is thinking…',
         [STATE.AI_AIM]: 'The computer is lining up its shot…',
         [STATE.SIMULATING]: 'Waiting for both pens to stop…',
@@ -502,6 +504,23 @@
   ui.btnAgain.addEventListener('click', startMatch);
   ui.btnSetup.addEventListener('click', backToMenu);
   ui.btnMenu.addEventListener('click', backToMenu);
+
+  // Android back button: cancel an aim first, then leave the match. On the
+  // menu it returns false, and the app goes to the background.
+  PG.native.onBack(() => {
+    if (input.getAim()) {
+      input.cancel();
+      return true;
+    }
+    if (game.state !== STATE.MENU) {
+      backToMenu();
+      return true;
+    }
+    return false;
+  });
+  if (PG.native.isApp) {
+    $('cancel-hint').textContent = 'The back button cancels a shot.';
+  }
 
   // Redraw menu previews once the web font has loaded (label text on the marker).
   if (document.fonts && document.fonts.ready) {

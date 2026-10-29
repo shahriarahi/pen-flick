@@ -808,9 +808,14 @@
     /* ---------------- responsive sizing ---------------- */
 
     function resize() {
+      // Fit inside the stage's container minus its padding (the notch / safe-area insets).
+      const box = stage.parentElement;
+      const cs = getComputedStyle(box);
+      const innerW = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const innerH = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
       const gutter = 16;
-      const availW = Math.max(300, window.innerWidth - gutter * 2);
-      const availH = Math.max(200, window.innerHeight - gutter * 2);
+      const availW = Math.max(300, innerW - gutter * 2);
+      const availH = Math.max(200, innerH - gutter * 2);
       const scale = Math.min(availW / VIEW.width, availH / VIEW.height);
       const cssW = Math.floor(VIEW.width * scale);
       const cssH = Math.floor(VIEW.height * scale);
@@ -1085,7 +1090,9 @@
       drawPenAt(c, def, cw, 0, 0, -0.06, { pxScale: s });
     }
 
-    window.addEventListener('resize', resize);
+    // Watching the container (not just the window) also catches inset changes,
+    // which the Android app may report a moment after the page loads.
+    new ResizeObserver(resize).observe(stage.parentElement);
     resize();
 
     return { render, resize, toWorld, drawPenPreview };
