@@ -47,7 +47,7 @@
         return;
       }
       const pt = hooks.toWorld(e.clientX, e.clientY);
-      const hit = hooks.hitTest(pt);
+      const hit = hooks.hitTest(pt, e.pointerType);
       if (!hit) return;
       drag = { pointerId: e.pointerId, grab: hit.grab, pointer: pt, offset: hit.offset };
       canvas.setPointerCapture(e.pointerId);
@@ -60,7 +60,7 @@
       if (drag && e.pointerId === drag.pointerId) {
         drag.pointer = pt;
       } else if (!drag && e.pointerType === 'mouse') {
-        canvas.style.cursor = hooks.hitTest(pt) ? 'grab' : 'default';
+        canvas.style.cursor = hooks.hitTest(pt, e.pointerType) ? 'grab' : 'default';
       }
     });
 

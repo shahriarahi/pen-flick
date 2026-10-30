@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<!-- Shown by the Android app instead of the game when the phone's Android System
+     WebView is older than android.minWebViewVersion in capacitor.config.json
+     (88: the game's CSS uses inset, aspect-ratio and flexbox gap). Keep this page
+     to plain, old-fashioned HTML and CSS so it displays on those old WebViews. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pen Flick: update needed</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0c0b0a; color: #f4efe6; font-family: sans-serif; }
+    .box { max-width: 520px; margin: 0 auto; padding: 32px 24px; text-align: center; }
+    h1 { font-size: 26px; color: #f0b44c; margin: 0 0 12px; }
+    p { font-size: 16px; line-height: 1.5; color: #d9d1c4; }
+    a.btn { display: inline-block; margin-top: 12px; padding: 14px 22px; border-radius: 10px;
+            background: #f0b44c; color: #1a1612; font-weight: bold; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Pen Flick needs an update</h1>
+    <p>This phone's <b>Android System WebView</b>, the part of Android that runs the game,
+      is too old. Update it from the Play Store, then open Pen Flick again.</p>
+    <a class="btn" href="https://play.google.com/store/apps/details?id=com.google.android.webview">Update in the Play Store</a>
+  </div>
+</body>
+</html>

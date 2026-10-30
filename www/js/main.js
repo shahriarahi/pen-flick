@@ -3,12 +3,14 @@
 
    Turn-based state machine:
 
-     MENU ──start──▶ PLAYER_AIM ──release──▶ SIMULATING ──pens settled──▶ AI_THINK
-                         ▲                      │   │                        │
-                         │                      │   └─pen falls─▶ GAME_OVER  ▼
-                         └────pens settled──────┘◀──────release──────── AI_AIM
+     MENU ──start──▶ SETUP ──▶ PLAYER_AIM ──release──▶ SIMULATING ──pens settled──▶ AI_THINK
+                                   ▲                      │   │                        │
+                                   │                      │   └─pen falls─▶ GAME_OVER  ▼
+                                   └────pens settled──────┘◀──────release──────── AI_AIM
 
-   A match starts in PLAYER_AIM or AI_THINK — the first move alternates.
+   SETUP picks a fair starting layout (see fairLayout), spread across frames
+   so slow phones don't freeze. The match then starts in PLAYER_AIM or
+   AI_THINK — the first move alternates.
    Input is only accepted in PLAYER_AIM. In SIMULATING we wait until BOTH
    pens' linear and angular speeds stay below tiny thresholds before handing
    the turn over.
@@ -30,6 +32,7 @@
 
   const STATE = Object.freeze({
     MENU: 'menu',
+    SETUP: 'setup',
     PLAYER_AIM: 'player-aim',
     AI_THINK: 'ai-think',
     AI_AIM: 'ai-aim',
@@ -88,6 +91,7 @@
     settleTicks: 0,
     outcome: null,
     aiTask: null,
+    setup: null, // { task, playerDef, aiDef, first } while in SETUP
     aiShot: null,
     effects: [],
     shake: 0,
@@ -96,10 +100,16 @@
 
   const input = PG.createInput(ui.canvas, {
     toWorld: renderer.toWorld,
-    hitTest(pt) {
+    hitTest(pt, pointerType) {
       if (game.state !== STATE.PLAYER_AIM) return null; // ← the input lock
-      const body = game.pens.player.body;
-      return game.physics.hitTestPen(body, pt.x, pt.y, PG.INPUT.GRAB_TOLERANCE);
+      const pen = game.pens.player;
+      let tolerance = PG.INPUT.GRAB_TOLERANCE;
+      if (pointerType === 'touch') {
+        // A pen is only a few pixels wide on a phone: widen the grab strip to finger size.
+        const strip = PG.INPUT.TOUCH_TARGET_PX * renderer.worldUnitsPerPixel();
+        tolerance = Math.max(tolerance, (strip - pen.def.width) / 2);
+      }
+      return game.physics.hitTestPen(pen.body, pt.x, pt.y, tolerance);
     },
     onRelease(aim) {
       if (game.state === STATE.PLAYER_AIM) flick(game.pens.player, aim.angle, aim.power, aim.offset);
@@ -127,23 +137,18 @@
 
   function startMatch() {
     game.matchId++;
-    const physics = PG.createPhysics();
-    physics.onPenCollision(onImpact);
-
     const playerDef = PG.PENS[game.settings.penId];
     const aiDef = PG.PENS[U.pick(PG.PEN_ORDER)];
     // The first move alternates between matches (you start the very first one).
     const first = game.matchesPlayed++ % 2 === 0 ? 'player' : 'ai';
-    const start = fairLayout(playerDef, aiDef, first);
-    game.physics = physics;
-    game.pens = {
-      player: makePen(physics, 'player', playerDef, start.player.x, start.player.y, start.player.angle),
-      ai: makePen(physics, 'ai', aiDef, start.ai.x, start.ai.y, start.ai.angle),
-    };
+    game.setup = { task: PG.AI.createTask(fairLayout(playerDef, aiDef, first)), playerDef, aiDef, first };
+    game.pens = null;
+    game.physics = null;
     game.turnNumber = 0;
     game.outcome = null;
     game.effects = [];
     game.shake = 0;
+    game.shooter = first;
 
     ui.hudPlayerPen.textContent = playerDef.name;
     ui.hudAiPen.textContent = aiDef.name;
@@ -153,6 +158,20 @@
     ui.hud.classList.remove('hidden');
     ui.footer.classList.remove('hidden');
 
+    setState(STATE.SETUP); // update() steps the layout search, then calls placePens
+  }
+
+  /** Puts both pens on the desk at the layout SETUP chose and starts the first turn. */
+  function placePens(start) {
+    const { playerDef, aiDef, first } = game.setup;
+    game.setup = null;
+    const physics = PG.createPhysics();
+    physics.onPenCollision(onImpact);
+    game.physics = physics;
+    game.pens = {
+      player: makePen(physics, 'player', playerDef, start.player.x, start.player.y, start.player.angle),
+      ai: makePen(physics, 'ai', aiDef, start.ai.x, start.ai.y, start.ai.angle),
+    };
     beginTurn(first);
   }
 
@@ -160,8 +179,9 @@
       knock the other pen off with the opening shot. Attempts alternate between
       facing rows (player near you, computer at the far side) and the two ends
       of the desk — light pens are almost always knock-out-able in the rows
-      layout, but rarely when they start the full desk length apart. */
-  function fairLayout(playerDef, aiDef, first) {
+      layout, but rarely when they start the full desk length apart.
+      A generator: it runs as a task in SETUP, a few rehearsals per frame. */
+  function* fairLayout(playerDef, aiDef, first) {
     const cx = D.x + D.w / 2;
     const cy = D.y + D.h / 2;
     let layout;
@@ -179,7 +199,7 @@
         };
       }
       const [shooter, target] = first === 'player' ? [layout.player, layout.ai] : [layout.ai, layout.player];
-      if (!PG.AI.hasOpeningKnockout(shooter, target)) break;
+      if (!(yield* PG.AI.hasOpeningKnockout(shooter, target))) break;
     }
     return layout;
   }
@@ -254,6 +274,7 @@
   function backToMenu() {
     game.matchId++;
     input.cancel();
+    game.setup = null;
     game.pens = null;
     game.physics = null;
     game.effects = [];
@@ -291,7 +312,11 @@
     game.time += dt;
     game.stateTime += dt;
 
-    if (game.state === STATE.AI_THINK) {
+    if (game.state === STATE.SETUP) {
+      const task = game.setup.task;
+      task.run(AIS.FAIR_START.budgetMs);
+      if (task.done) placePens(task.result);
+    } else if (game.state === STATE.AI_THINK) {
       const task = game.aiTask;
       if (!task.done) task.run(AIS.PLAN_BUDGET_MS);
       if (task.done && game.stateTime >= AIS.THINK_MS) {
@@ -417,6 +442,7 @@
     ui.status.textContent =
       {
         [STATE.PLAYER_AIM]: `Press on your pen, drag backwards and release to flick · ${CANCEL_HINT}`,
+        [STATE.SETUP]: 'Setting up the desk…',
         [STATE.AI_THINK]: 'The computer is thinking…',
         [STATE.AI_AIM]: 'The computer is lining up its shot…',
         [STATE.SIMULATING]: 'Waiting for both pens to stop…',

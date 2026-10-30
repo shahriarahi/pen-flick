@@ -5,7 +5,8 @@
    object. main.js calls task.run(budgetMs) once per frame until task.done,
    then reads task.result = { angle, power (0..1), offset }. Easy finishes
    instantly; Medium and Hard run physics rehearsals spread across frames so
-   the game never stutters.
+   the game never stutters. The fair-start check at the beginning of a match
+   runs the same way (PG.AI.createTask + PG.AI.hasOpeningKnockout).
 
    A "snap" is a frozen copy of a pen: { def, x, y, angle }.
    ========================================================================== */
@@ -375,6 +376,13 @@
                 return planEasy(aiSnap, playerSnap, cfg);
               })();
 
+      return PG.AI.createTask(gen);
+    },
+
+    /** Wraps a generator that yields between rehearsals in a task that main.js
+        steps once per frame: task.run(budgetMs) works until the budget is spent,
+        then task.done / task.result say whether it finished and what it returned. */
+    createTask(gen) {
       const task = {
         done: false,
         result: null,
@@ -394,16 +402,13 @@
       return task;
     },
 
-    /** True if the pen that shoots first could knock the other off straight away
-        (main.js re-rolls such starting layouts). Runs synchronously. */
+    /** Generator: true if the pen that shoots first could knock the other off
+        straight away (main.js re-rolls such starting layouts). Use it with
+        yield* inside a createTask() generator so it runs across frames. */
     hasOpeningKnockout(shooterSnap, targetSnap) {
       const fair = PG.AI_SETTINGS.FAIR_START;
       const hard = PG.AI_SETTINGS.hard;
-      const gen = hasKnockout(shooterSnap, targetSnap, hard, fair.rehearsals, fair.search || hard.search);
-      let r;
-      do r = gen.next();
-      while (!r.done);
-      return r.value;
+      return hasKnockout(shooterSnap, targetSnap, hard, fair.rehearsals, fair.search || hard.search);
     },
 
     // Exposed for tuning / debugging from the browser console.

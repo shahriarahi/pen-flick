@@ -3,6 +3,12 @@
   "appName": "Pen Flick",
   "webDir": "www",
   "backgroundColor": "#0c0b0a",
+  "server": {
+    "errorPath": "webview-too-old.html"
+  },
+  "android": {
+    "minWebViewVersion": 88
+  },
   "plugins": {
     "SystemBars": {
       "hidden": true,

@@ -830,6 +830,11 @@
       buildBackground();
     }
 
+    /** World units per CSS pixel on screen (grows as the board shrinks). */
+    function worldUnitsPerPixel() {
+      return VIEW.width / canvas.getBoundingClientRect().width;
+    }
+
     /** Converts a mouse/touch position to world coordinates. */
     function toWorld(clientX, clientY) {
       const r = canvas.getBoundingClientRect();
@@ -1095,6 +1100,6 @@
     new ResizeObserver(resize).observe(stage.parentElement);
     resize();
 
-    return { render, resize, toWorld, drawPenPreview };
+    return { render, resize, toWorld, worldUnitsPerPixel, drawPenPreview };
   };
 })((window.PenGame = window.PenGame || {}));

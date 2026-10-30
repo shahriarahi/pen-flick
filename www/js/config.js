@@ -82,6 +82,7 @@
      ------------------------------------------------------------------------ */
   PG.INPUT = {
     GRAB_TOLERANCE: 26, // how far outside the pen outline a press still "grabs" it
+    TOUCH_TARGET_PX: 48, // fingers: the grab strip across a pen is at least this wide on screen (Android's 48dp guideline)
     MAX_DRAG_DISTANCE: 230, // drag length (world units) that equals 100% power
     MIN_DRAG_DISTANCE: 12, // shorter drags are treated as a cancelled shot
   };
@@ -261,6 +262,7 @@
       attempts: 12,
       rehearsals: 250, // previews per layout check (it stops early once it finds a knock-out)
       search: null, // null = check with the same shot search the Hard AI uses
+      budgetMs: 25, // per-frame CPU budget for these checks (nothing moves yet, so it can use more of each frame)
     },
 
     easy: {

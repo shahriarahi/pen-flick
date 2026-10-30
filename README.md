@@ -32,6 +32,10 @@ npm run open         # open android/ in Android Studio, then press Run
 To try it on a phone, turn on *Developer options → USB debugging* and plug it in. Android Studio
 lists it next to the Run button. For the Play Store, use *Build → Generate Signed App Bundle*.
 
+On phones, the grab area around your pen widens to finger size (`TOUCH_TARGET_PX` in `config.js`).
+The app needs Android 7.0+ with Android System WebView 88 or newer; on an older WebView it shows
+`www/webview-too-old.html`, which links to the WebView update in the Play Store.
+
 The app ID is `io.github.shahriarahi.penflick` (in `capacitor.config.json` and
 `android/app/build.gradle`). It can't be changed after the first Play Store upload.
 
