@@ -89,7 +89,8 @@
   <script src="vendor/capacitor-app.js"></script>
 
   <!-- Game modules: each one attaches itself to the shared window.PenGame namespace.
-       Order matters: utils -> config -> native -> physics -> renderer -> input -> ai -> main. -->
+       Order matters: utils -> config -> native -> physics -> renderer -> input -> ai -> ai-pool -> main.
+       js/ai-worker.js isn't listed: ai-pool.js starts it as a Web Worker. -->
   <script src="js/utils.js"></script>
   <script src="js/config.js"></script>
   <script src="js/native.js"></script>
@@ -97,6 +98,7 @@
   <script src="js/renderer.js"></script>
   <script src="js/input.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/ai-pool.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

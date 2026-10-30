@@ -8,6 +8,13 @@
    the game never stutters. The fair-start check at the beginning of a match
    runs the same way (PG.AI.createTask + PG.AI.hasOpeningKnockout).
 
+   Rehearsals run in parallel Web Workers when they're available (ai-pool.js,
+   ai-worker.js), and on the main thread otherwise. The knock-out search is
+   split into independent "shot lines" (one direction × grab point each).
+   Workers run lines ahead of time; knockoutSearch commits their results
+   strictly in order and applies the rehearsal budget exactly as a one-by-one
+   search would, so the AI makes the same choices either way.
+
    A "snap" is a frozen copy of a pen: { def, x, y, angle }.
    ========================================================================== */
 (function (PG) {
@@ -158,67 +165,130 @@
     return { a, p, cfg, left: budget, results: [] };
   }
 
-  function* trial(s, shot) {
-    if (s.left <= 0) return null;
-    s.left--;
-    const r = rehearse(s.a, s.p, shot);
-    s.results.push(r);
-    yield; // let the frame breathe between rehearsals
-    return r;
-  }
+  /** Yielded while waiting for a worker: task.run() then ends its frame early
+      so the browser can deliver the worker's reply. */
+  const WAIT = { waiting: true };
 
   const isWin = (r, cfg) => r.playerOff && !r.aiOff && r.aiEdge >= cfg.edgeSafetyMargin;
 
   /**
-   * Looks for shots that knock the target off. For every direction × grab
-   * point it first fires one full-power probe (a line that never touches the
-   * target is dropped), then sweeps the force upward and keeps the weakest
-   * shot that wins. If the sweep jumps straight from "not enough" to "own pen
-   * flies off", it bisects that gap — the winning window can be narrow.
+   * One line of the knock-out search: a fixed direction and grab point. It
+   * fires one full-power probe (a line that never touches the target is
+   * dropped), then sweeps the force upward and keeps the weakest shot that
+   * wins. If the sweep jumps straight from "not enough" to "own pen flies
+   * off", it bisects that gap — the winning window can be narrow.
+   *
+   * It depends only on its arguments, so it can run in a worker. It stops
+   * early (cut: true) rather than rehearse more than `cap` shots, and yields
+   * after each rehearsal. Returns { trials, won, cut }.
+   */
+  function* shotLine(a, p, cfg, opts, start, angle, offset, cap) {
+    const trials = [];
+    const cut = () => ({ trials, won: null, cut: true });
+
+    if (trials.length >= cap) return cut();
+    const probe = rehearse(a, p, { angle, power: 1, offset });
+    trials.push(probe);
+    yield;
+    if (!probe.touched) return { trials, won: null, cut: false };
+
+    let lastShort = null;
+    let won = null;
+    for (let power = start; power < 1 && !won; power += opts.powerStep) {
+      if (trials.length >= cap) return cut();
+      const r = rehearse(a, p, { angle, power, offset });
+      trials.push(r);
+      yield;
+      if (isWin(r, cfg)) won = r;
+      else if (r.aiOff || r.playerOff) break; // too much force from here on
+      else lastShort = r;
+    }
+    if (!won && isWin(probe, cfg)) won = probe;
+
+    if (!won && lastShort) {
+      let lo = lastShort.power;
+      let hi = Math.min(1, lo + opts.powerStep);
+      for (let i = 0; i < opts.refineIterations && !won; i++) {
+        if (trials.length >= cap) return cut();
+        const mid = (lo + hi) / 2;
+        const r = rehearse(a, p, { angle, power: mid, offset });
+        trials.push(r);
+        yield;
+        if (isWin(r, cfg)) won = r;
+        else if (r.aiOff || r.playerOff) hi = mid;
+        else lo = mid;
+      }
+    }
+    return { trials, won, cut: false };
+  }
+
+  /** Waits for a worker job's result; runs `local()` on this thread instead if
+      there is no job (no workers) or the workers failed. */
+  function* jobResult(job, local) {
+    while (job && !job.done && !job.failed) yield WAIT;
+    return job && job.done ? job.value : yield* local();
+  }
+
+  /**
+   * Looks for shots that knock the target off by running a shotLine for every
+   * direction × grab point. With workers, every line is queued at once and
+   * runs ahead; results are then committed in line order, exactly as a
+   * one-at-a-time search would: rehearsals count against the budget in order,
+   * and the search stops where that search would have run out or (with
+   * stopAtFirst) found its first knock-out. Work past that point is dropped.
    */
   function* knockoutSearch(s, opts) {
     const { a, p, cfg } = s;
     const aim = aimAt(a, p);
     const start = U.clamp(powerToReach(a, contactGap(a, p, aim), 0) * 0.9, 0.05, 1);
-    const wins = [];
-
+    const lines = [];
     for (const angle of fanAngles(a, p, aim, opts.maxAngleDeg, opts.angleStepDeg)) {
-      for (const grab of opts.grabOffsets) {
-        const offset = grab * (a.def.length / 2);
-        const probe = yield* trial(s, { angle, power: 1, offset });
-        if (!probe) return wins; // out of budget
-        if (!probe.touched) continue;
+      for (const grab of opts.grabOffsets) lines.push({ angle, offset: grab * (a.def.length / 2) });
+    }
 
-        let lastShort = null;
-        let won = null;
-        for (let power = start; power < 1 && !won; power += opts.powerStep) {
-          const r = yield* trial(s, { angle, power, offset });
-          if (!r) return wins;
-          if (isWin(r, cfg)) won = r;
-          else if (r.aiOff || r.playerOff) break; // too much force from here on
-          else lastShort = r;
-        }
-        if (!won && isWin(probe, cfg)) won = probe;
-
-        if (!won && lastShort) {
-          let lo = lastShort.power;
-          let hi = Math.min(1, lo + opts.powerStep);
-          for (let i = 0; i < opts.refineIterations && !won; i++) {
-            const mid = (lo + hi) / 2;
-            const r = yield* trial(s, { angle, power: mid, offset });
-            if (!r) return wins;
-            if (isWin(r, cfg)) won = r;
-            else if (r.aiOff || r.playerOff) hi = mid;
-            else lo = mid;
-          }
-        }
-        if (won) {
-          wins.push(won);
+    // The budget only shrinks, so today's budget caps every line.
+    const pool = PG.AIPool && PG.AIPool.available() ? PG.AIPool : null;
+    const jobs = lines.map((l) =>
+      pool ? pool.submit({ kind: 'line', a, p, cfg, opts, start, angle: l.angle, offset: l.offset, cap: s.left }) : null
+    );
+    const wins = [];
+    try {
+      for (let i = 0; i < lines.length; i++) {
+        const { angle, offset } = lines[i];
+        const line = yield* jobResult(jobs[i], () => shotLine(a, p, cfg, opts, start, angle, offset, s.left));
+        const used = Math.min(line.trials.length, s.left);
+        for (let k = 0; k < used; k++) s.results.push(line.trials[k]);
+        s.left -= used;
+        if (line.cut || used < line.trials.length) return wins; // out of budget partway through this line
+        if (line.won) {
+          wins.push(line.won);
           if (opts.stopAtFirst) return wins;
         }
       }
+      return wins;
+    } finally {
+      for (const job of jobs) if (job) pool.cancel(job);
     }
-    return wins;
+  }
+
+  /** Rehearses independent shots (in parallel when workers are available) and
+      records them in order, like a series of single trials. */
+  function* trials(s, shots) {
+    const pool = PG.AIPool && PG.AIPool.available() ? PG.AIPool : null;
+    const jobs = shots.map((shot) => (pool ? pool.submit({ kind: 'shot', a: s.a, p: s.p, shot }) : null));
+    try {
+      for (let i = 0; i < shots.length && s.left > 0; i++) {
+        const r = yield* jobResult(jobs[i], function* () {
+          const local = rehearse(s.a, s.p, shots[i]);
+          yield; // let the frame breathe between rehearsals
+          return local;
+        });
+        s.left--;
+        s.results.push(r);
+      }
+    } finally {
+      for (const job of jobs) if (job) pool.cancel(job);
+    }
   }
 
   /** The winning shot that leaves the AI's own pen furthest from any edge. */
@@ -324,9 +394,11 @@
       const quarter = Math.PI / 4;
       const retreats = [toCentre, away, toCentre + quarter, toCentre - quarter, away + quarter, away - quarter];
       s.left += retreats.length * cfg.retreatPowers.length; // retreats always get rehearsed
+      const shots = [];
       for (const angle of retreats) {
-        for (const power of cfg.retreatPowers) yield* trial(s, { angle, power, offset: 0 });
+        for (const power of cfg.retreatPowers) shots.push({ angle, power, offset: 0 });
       }
+      yield* trials(s, shots);
 
       const ranked = positionalCandidates(s.results, cfg);
       for (const c of ranked.slice(0, cfg.replyCandidates)) {
@@ -395,11 +467,26 @@
               task.result = r.value;
               break;
             }
-            if (performance.now() - t0 > budgetMs) break;
+            if (r.value === WAIT || performance.now() - t0 > budgetMs) break;
           }
+        },
+        /** Abandons the task and cancels its queued worker jobs. */
+        cancel() {
+          if (!task.done) gen.return();
+          task.done = true;
         },
       };
       return task;
+    },
+
+    /** Runs one worker job (called inside ai-worker.js). */
+    runJob(job) {
+      if (job.kind === 'shot') return rehearse(job.a, job.p, job.shot);
+      const gen = shotLine(job.a, job.p, job.cfg, job.opts, job.start, job.angle, job.offset, job.cap);
+      let r;
+      do r = gen.next();
+      while (!r.done);
+      return r.value;
     },
 
     /** Generator: true if the pen that shoots first could knock the other off

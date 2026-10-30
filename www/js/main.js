@@ -137,6 +137,7 @@
 
   function startMatch() {
     game.matchId++;
+    cancelTasks();
     const playerDef = PG.PENS[game.settings.penId];
     const aiDef = PG.PENS[U.pick(PG.PEN_ORDER)];
     // The first move alternates between matches (you start the very first one).
@@ -159,6 +160,14 @@
     ui.footer.classList.remove('hidden');
 
     setState(STATE.SETUP); // update() steps the layout search, then calls placePens
+  }
+
+  /** Stops any unfinished layout search or AI plan (and its worker jobs). */
+  function cancelTasks() {
+    if (game.setup) game.setup.task.cancel();
+    if (game.aiTask) game.aiTask.cancel();
+    game.setup = null;
+    game.aiTask = null;
   }
 
   /** Puts both pens on the desk at the layout SETUP chose and starts the first turn. */
@@ -274,7 +283,7 @@
   function backToMenu() {
     game.matchId++;
     input.cancel();
-    game.setup = null;
+    cancelTasks();
     game.pens = null;
     game.physics = null;
     game.effects = [];

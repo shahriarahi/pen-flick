@@ -253,7 +253,8 @@
   PG.AI_SETTINGS = {
     THINK_MS: 850, // minimum "thinking" pause before the AI starts aiming
     AIM_MS: 1000, // how long the AI's drag/power animation plays before release
-    PLAN_BUDGET_MS: 10, // per-frame CPU budget for the Hard AI's shot rehearsals
+    PLAN_BUDGET_MS: 10, // per-frame CPU budget for the Hard AI's shot rehearsals (when they run on the main thread)
+    MAX_WORKERS: 4, // Web Workers that run rehearsals in parallel (at most one fewer than the CPU's cores)
     SIM_MAX_TICKS: 720, // longest rehearsal (12 s of simulated time)
 
     // Fair start: a new match re-rolls the starting layout (up to `attempts`
